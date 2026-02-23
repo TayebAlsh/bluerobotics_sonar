@@ -32,6 +32,8 @@ parameters, and publishes the sonar data to a topic. It also allows for
 dynamic reconfiguration of the sonar settings.
 """
 
+import time
+
 from brping import Ping1D
 from brping.definitions import PING1D_PROFILE
 from bluerobotics_sonar_msgs.msg import SonarPing1D
@@ -104,8 +106,18 @@ class Ping1DNode(Node):
             self.sonar.connect_udp(self.device, self.baudrate)
         else:
             self.sonar.connect_serial(self.device, self.baudrate)
-        if not self.sonar.initialize():
-            self.get_logger().info("Failed to initialize Ping!")
+        # Retry initialization — under heavy launch load the 0.5s default
+        # timeout may expire before the device responds over UDP
+        max_retries = 5
+        for attempt in range(1, max_retries + 1):
+            if self.sonar.initialize():
+                break
+            self.get_logger().warn(
+                f"Ping initialization attempt {attempt}/{max_retries} failed, retrying..."
+            )
+            time.sleep(1.0)
+        else:
+            self.get_logger().error("Failed to initialize Ping after all retries!")
             exit(1)
 
         # --- Verify Firmware Version ---
@@ -124,13 +136,17 @@ class Ping1DNode(Node):
                     )
 
         # --- Configure Sonar ---
-        self.sonar.set_gain_setting(self.gain_setting)
-        self.sonar.set_mode_auto(self.mode_auto)
-        self.sonar.set_ping_enable(self.ping_enable)
-        self.sonar.set_ping_interval(self.ping_interval)
+        # verify=False: brping 0.2.x reads back attributes (e.g. _scan_start)
+        # that may not exist yet when the device returns partial/dummy data
+        self.sonar.set_gain_setting(self.gain_setting, verify=False)
+        self.sonar.set_mode_auto(self.mode_auto, verify=False)
+        self.sonar.set_ping_enable(self.ping_enable, verify=False)
+        self.sonar.set_ping_interval(self.ping_interval, verify=False)
         self.sonar.set_range(int(self.scan_start * 1000),
-                             int(self.scan_length * 1000))
-        self.sonar.set_speed_of_sound(int(self.speed_of_sound * 1000))
+                             int(self.scan_length * 1000),
+                             verify=False)
+        self.sonar.set_speed_of_sound(int(self.speed_of_sound * 1000),
+                                      verify=False)
         self.sonar.control_continuous_start(PING1D_PROFILE)
 
         # --- Publisher ---
