@@ -67,8 +67,8 @@ class Ping1DNode(Node):
             'scan_start': [0.0, float],
             'scan_length': [1.0, float], 
             'speed_of_sound': [1500, int],
-            'device': ['/dev/ttyUSB0', int],
-            'baudrate': [115200, int],
+            'device': ['/dev/ttyUSB0', str],
+            'baudrate': [115200, int],  # int for serial; also used as UDP port
             'topic': ['/sonar/ping1d/data', str],
             'frame_id': ['ping1d', str],
         }
